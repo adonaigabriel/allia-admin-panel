@@ -1165,7 +1165,7 @@ function FormsTab({ profile }: { profile: Profile }) {
 
         await supabase.from("activity_log").insert({
           user_id: profile.id,
-          action: "Formul\u00e1rio atualizado",
+          action: "Formulário atualizado",
           details: `${formData.manufacturer} - ${formData.name}`,
         });
       } else {
@@ -1189,7 +1189,7 @@ function FormsTab({ profile }: { profile: Profile }) {
 
         await supabase.from("activity_log").insert({
           user_id: profile.id,
-          action: "Formul\u00e1rio criado",
+          action: "Formulário criado",
           details: `${formData.manufacturer} - ${formData.name}`,
         });
       }
@@ -1228,7 +1228,7 @@ function FormsTab({ profile }: { profile: Profile }) {
   };
 
   const handleDelete = async (form: QualificationForm) => {
-    if (!confirm(`Tem certeza que deseja excluir o formul\u00e1rio "${form.name}"?`)) return;
+    if (!confirm(`Tem certeza que deseja excluir o formulário "${form.name}"?`)) return;
 
     const { error } = await supabase
       .from("qualification_forms")
@@ -1238,7 +1238,7 @@ function FormsTab({ profile }: { profile: Profile }) {
     if (!error) {
       await supabase.from("activity_log").insert({
         user_id: profile.id,
-        action: "Formul\u00e1rio exclu\u00eddo",
+        action: "Formulário excluído",
         details: `${form.manufacturer} - ${form.name}`,
       });
       await loadForms();
@@ -1251,15 +1251,15 @@ function FormsTab({ profile }: { profile: Profile }) {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Formul\u00e1rios de Qualifica\u00e7\u00e3o</h1>
-          <p className="text-gray-500 mt-1">Roteamento de formul\u00e1rios SurveyMonkey por fabricante/solu\u00e7\u00e3o</p>
+          <h1 className="text-2xl font-bold text-gray-900">Formulários de Qualificação</h1>
+          <p className="text-gray-500 mt-1">Roteamento de formulários SurveyMonkey por fabricante/solução</p>
         </div>
         <button
           onClick={openAddModal}
           className="btn-primary flex items-center gap-2 text-sm"
         >
           <IconPlus />
-          Novo Formul\u00e1rio
+          Novo Formulário
         </button>
       </div>
 
@@ -1275,16 +1275,16 @@ function FormsTab({ profile }: { profile: Profile }) {
           <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400">
             <IconClipboard />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum formul\u00e1rio cadastrado</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum formulário cadastrado</h3>
           <p className="text-gray-500 text-sm max-w-md mx-auto">
-            Adicione formul\u00e1rios de qualifica\u00e7\u00e3o para que a AllIA envie o link correto ao identificar uma oportunidade.
+            Adicione formulários de qualificação para que a AllIA envie o link correto ao identificar uma oportunidade.
           </p>
           <button
             onClick={openAddModal}
             className="btn-primary inline-flex items-center gap-2 text-sm mt-6"
           >
             <IconPlus />
-            Adicionar Primeiro Formul\u00e1rio
+            Adicionar Primeiro Formulário
           </button>
         </div>
       ) : (
@@ -1292,7 +1292,7 @@ function FormsTab({ profile }: { profile: Profile }) {
           {/* Summary cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="card p-4">
-              <p className="text-sm text-gray-500">Total de Formul\u00e1rios</p>
+              <p className="text-sm text-gray-500">Total de Formulários</p>
               <p className="text-2xl font-bold text-gray-900">{forms.length}</p>
             </div>
             <div className="card p-4">
@@ -1311,11 +1311,11 @@ function FormsTab({ profile }: { profile: Profile }) {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Fabricante</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Formul\u00e1rio</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Formulário</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Categoria</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Link SurveyMonkey</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">A\u00e7\u00f5es</th>
+                  <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -1396,7 +1396,7 @@ function FormsTab({ profile }: { profile: Profile }) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-6">
-              {editingForm ? "Editar Formul\u00e1rio" : "Novo Formul\u00e1rio de Qualifica\u00e7\u00e3o"}
+              {editingForm ? "Editar Formulário" : "Novo Formulário de Qualificação"}
             </h2>
             <form onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -1412,26 +1412,26 @@ function FormsTab({ profile }: { profile: Profile }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Categoria da Solu\u00e7\u00e3o</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Categoria da Solução</label>
                   <input
                     type="text"
                     required
                     value={formData.solution_category}
                     onChange={(e) => setFormData({ ...formData, solution_category: e.target.value })}
                     className="input-field"
-                    placeholder="Ex: Servidores, Virtualiza\u00e7\u00e3o"
+                    placeholder="Ex: Servidores, Virtualização"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Formul\u00e1rio</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Formulário</label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="input-field"
-                  placeholder="Ex: Qualifica\u00e7\u00e3o Dell Servidores"
+                  placeholder="Ex: Qualificação Dell Servidores"
                 />
               </div>
               <div>
@@ -1446,13 +1446,13 @@ function FormsTab({ profile }: { profile: Profile }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Descri\u00e7\u00e3o (opcional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição (opcional)</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="input-field"
                   rows={2}
-                  placeholder="Breve descri\u00e7\u00e3o do formul\u00e1rio..."
+                  placeholder="Breve descrição do formulário..."
                 />
               </div>
               <div className="flex items-center gap-3">
@@ -1485,7 +1485,7 @@ function FormsTab({ profile }: { profile: Profile }) {
                   Cancelar
                 </button>
                 <button type="submit" disabled={saveLoading} className="btn-primary flex-1 text-sm disabled:opacity-70">
-                  {saveLoading ? "Salvando..." : editingForm ? "Salvar Altera\u00e7\u00f5es" : "Adicionar"}
+                  {saveLoading ? "Salvando..." : editingForm ? "Salvar Alterações" : "Adicionar"}
                 </button>
               </div>
             </form>
