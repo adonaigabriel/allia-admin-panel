@@ -1205,18 +1205,25 @@ function FormsTab({ profile }: { profile: Profile }) {
 
   const handleToggleActive = async (form: QualificationForm) => {
     const newStatus = !form.is_active;
+    // Optimistic update
+    setForms(prev => prev.map(f => f.id === form.id ? { ...f, is_active: newStatus } : f));
+    
     const { error } = await supabase
       .from("qualification_forms")
       .update({ is_active: newStatus, updated_at: new Date().toISOString() })
       .eq("id", form.id);
 
-    if (!error) {
+    if (error) {
+      console.error("Toggle error:", error);
+      // Revert optimistic update
+      setForms(prev => prev.map(f => f.id === form.id ? { ...f, is_active: !newStatus } : f));
+      alert(`Erro ao alterar status: ${error.message}`);
+    } else {
       await supabase.from("activity_log").insert({
         user_id: profile.id,
-        action: newStatus ? "Formul\u00e1rio ativado" : "Formul\u00e1rio desativado",
+        action: newStatus ? "Formulário ativado" : "Formulário desativado",
         details: `${form.manufacturer} - ${form.name}`,
       });
-      await loadForms();
     }
   };
 
