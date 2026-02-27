@@ -270,7 +270,7 @@ function Sidebar({ activeTab, setActiveTab, onLogout }: {
       {/* Logo */}
       <div className="p-5 border-b border-gray-800">
         <div className="flex items-center gap-3">
-          <img src="/allia-logo.png" alt="AllIA" className="h-10 w-auto brightness-0 invert" />
+          <img src="/allia-logo-white.png" alt="AllIA" className="h-10 w-auto" />
           <div>
             <span className="text-xl font-extrabold text-white">
               All<span className="text-brand-red">IA</span>
