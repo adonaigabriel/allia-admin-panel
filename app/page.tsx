@@ -267,12 +267,9 @@ function Sidebar({ activeTab, setActiveTab, onLogout }: {
 
   return (
     <aside className="w-64 bg-brand-black min-h-screen flex flex-col shrink-0">
-      {/* Logo */}
+      {/* Header */}
       <div className="p-5 border-b border-gray-800">
-        <div className="flex items-center justify-end">
-          <img src="/allia-logo.png" alt="AllIA" className="h-12 w-auto" />
-        </div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-2">Admin Panel</p>
+        <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Admin Panel</p>
       </div>
 
       {/* Navigation */}
@@ -775,8 +772,13 @@ export default function Home() {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => setIsLoggedIn(false)} />
-      <main className="flex-1 p-8 overflow-auto">
-        {renderContent()}
+      <main className="flex-1 overflow-auto">
+        <div className="flex items-center justify-end p-4 pb-0">
+          <img src="/allia-logo.png" alt="AllIA" className="h-12 w-auto" />
+        </div>
+        <div className="px-8 pb-8 pt-4">
+          {renderContent()}
+        </div>
       </main>
     </div>
   );
