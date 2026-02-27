@@ -269,10 +269,10 @@ function Sidebar({ activeTab, setActiveTab, onLogout }: {
     <aside className="w-64 bg-brand-black min-h-screen flex flex-col shrink-0">
       {/* Logo */}
       <div className="p-5 border-b border-gray-800">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Admin Panel</p>
-          <img src="/allia-logo.png" alt="AllIA" className="h-10 w-auto" />
+        <div className="flex items-center justify-end">
+          <img src="/allia-logo.png" alt="AllIA" className="h-12 w-auto" />
         </div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-2">Admin Panel</p>
       </div>
 
       {/* Navigation */}
