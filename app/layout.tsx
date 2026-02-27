@@ -8,7 +8,8 @@ export const metadata: Metadata = {
   title: "AllIA - Painel Administrativo | VirtuAllIT Solutions",
   description: "Painel de gerenciamento da AllIA - VirtuHelper da VirtuAllIT Solutions. Gerencie usuários autorizados e configurações do chatbot.",
   icons: {
-    icon: "/favicon.svg",
+    icon: "/favicon.png",
+    apple: "/apple-touch-icon.png",
   },
 };
 

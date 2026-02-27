@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import AllIALogo from "./components/AllIALogo";
 import GeometricPattern from "./components/GeometricPattern";
 
 // Demo users for the admin panel
@@ -145,7 +144,7 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="flex justify-center mb-8">
-          <AllIALogo size="large" />
+          <img src="/allia-logo.png" alt="AllIA - VirtuHelper" className="h-24 w-auto" />
         </div>
 
         {/* Login Card */}
@@ -269,17 +268,9 @@ function Sidebar({ activeTab, setActiveTab, onLogout }: {
   return (
     <aside className="w-64 bg-brand-black min-h-screen flex flex-col shrink-0">
       {/* Logo */}
-      <div className="p-6 border-b border-gray-800">
+      <div className="p-5 border-b border-gray-800">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-brand-red rounded-xl flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="20" r="8" stroke="white" strokeWidth="2.5" fill="none" />
-              <circle cx="24" cy="20" r="3" fill="white" />
-              <line x1="24" y1="28" x2="24" y2="36" stroke="white" strokeWidth="2.5" />
-              <line x1="16" y1="20" x2="10" y2="20" stroke="white" strokeWidth="2.5" />
-              <line x1="32" y1="20" x2="38" y2="20" stroke="white" strokeWidth="2.5" />
-            </svg>
-          </div>
+          <img src="/allia-logo.png" alt="AllIA" className="h-10 w-auto brightness-0 invert" />
           <div>
             <span className="text-xl font-extrabold text-white">
               All<span className="text-brand-red">IA</span>
@@ -375,7 +366,7 @@ function DashboardTab() {
             { time: "09:30", action: "Login realizado", user: "adonai@virtuallit.com.br", type: "auth" },
             { time: "09:15", action: "Novo ticket de suporte #1247", user: "cliente@empresa.com", type: "support" },
             { time: "08:45", action: "Base de conhecimento atualizada", user: "Sistema", type: "system" },
-            { time: "08:30", action: "Chatbot respondeu 5 perguntas", user: "Alli (Bot)", type: "bot" },
+            { time: "08:30", action: "Chatbot respondeu 5 perguntas", user: "AllIA (Bot)", type: "bot" },
             { time: "08:00", action: "Backup automático concluído", user: "Sistema", type: "system" },
           ].map((activity, i) => (
             <div key={i} className="flex items-center gap-4 py-3 border-b border-gray-50 last:border-0">
@@ -569,7 +560,7 @@ function ChatbotTab() {
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Configuração do Chatbot</h1>
-        <p className="text-gray-500 mt-1">Gerencie a Alli - VirtuHelper da VirtuAllIT</p>
+        <p className="text-gray-500 mt-1">Gerencie a AllIA - VirtuHelper da VirtuAllIT</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -596,11 +587,11 @@ function ChatbotTab() {
         </div>
 
         <div className="card p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Personalidade da Alli</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Personalidade da AllIA</h2>
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nome</label>
-              <p className="text-sm text-gray-900">Alli - VirtuHelper</p>
+              <p className="text-sm text-gray-900">AllIA - VirtuHelper</p>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tom de Comunicação</label>
