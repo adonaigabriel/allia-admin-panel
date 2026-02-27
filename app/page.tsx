@@ -1,14 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "../lib/supabase";
 import GeometricPattern from "./components/GeometricPattern";
 
-// Demo users for the admin panel
-const DEMO_USERS = [
-  { id: 1, name: "Adonai Gabriel", email: "adonai@virtuallit.com.br", role: "Administrador", status: "Ativo", lastAccess: "27/02/2026 09:30" },
-  { id: 2, name: "Suporte VirtuAllIT", email: "suporte@virtuallit.com.br", role: "Operador", status: "Ativo", lastAccess: "26/02/2026 14:15" },
-  { id: 3, name: "Comunicação", email: "comm@virtuallit.com.br", role: "Visualizador", status: "Ativo", lastAccess: "25/02/2026 11:00" },
-];
+// Types
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  department: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ActivityLog {
+  id: string;
+  action: string;
+  details: string | null;
+  created_at: string;
+  user_id: string | null;
+}
 
 // SVG Icons as components
 function IconShield() {
@@ -116,25 +130,67 @@ function IconDatabase() {
 }
 
 // ==================== LOGIN PAGE ====================
-function LoginPage({ onLogin }: { onLogin: () => void }) {
+function LoginPage({ onLogin }: { onLogin: (profile: Profile) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
 
-    setTimeout(() => {
-      if (email === "adonai@virtuallit.com.br" && password === "admin123") {
-        onLogin();
-      } else {
-        setError("Credenciais inválidas. Tente novamente.");
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        if (authError.message.includes("Invalid login")) {
+          setError("Email ou senha incorretos.");
+        } else {
+          setError(authError.message);
+        }
         setIsLoading(false);
+        return;
       }
-    }, 1500);
+
+      if (data.user) {
+        // Fetch profile
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profileError || !profile) {
+          setError("Perfil não encontrado. Contate o administrador.");
+          setIsLoading(false);
+          return;
+        }
+
+        if (!profile.is_active) {
+          setError("Sua conta está desativada. Contate o administrador.");
+          await supabase.auth.signOut();
+          setIsLoading(false);
+          return;
+        }
+
+        // Log activity
+        await supabase.from("activity_log").insert({
+          user_id: data.user.id,
+          action: "Login realizado",
+          details: email,
+        });
+
+        onLogin(profile as Profile);
+      }
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -251,10 +307,11 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
 }
 
 // ==================== SIDEBAR ====================
-function Sidebar({ activeTab, setActiveTab, onLogout }: {
+function Sidebar({ activeTab, setActiveTab, onLogout, profile }: {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
+  profile: Profile;
 }) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: <IconActivity /> },
@@ -264,6 +321,11 @@ function Sidebar({ activeTab, setActiveTab, onLogout }: {
     { id: "messages", label: "Mensagens", icon: <IconMessageSquare /> },
     { id: "settings", label: "Configurações", icon: <IconSettings /> },
   ];
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    onLogout();
+  };
 
   return (
     <aside className="w-64 bg-brand-black min-h-screen flex flex-col shrink-0">
@@ -297,15 +359,15 @@ function Sidebar({ activeTab, setActiveTab, onLogout }: {
       <div className="p-4 border-t border-gray-800">
         <div className="flex items-center gap-3 mb-3 px-2">
           <div className="w-8 h-8 bg-brand-red rounded-full flex items-center justify-center text-white text-sm font-bold">
-            A
+            {profile.full_name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">Adonai Gabriel</p>
-            <p className="text-xs text-gray-500 truncate">Administrador</p>
+            <p className="text-sm font-medium text-white truncate">{profile.full_name}</p>
+            <p className="text-xs text-gray-500 truncate capitalize">{profile.role === "admin" ? "Administrador" : profile.role === "manager" ? "Gerente" : "Usuário"}</p>
           </div>
         </div>
         <button
-          onClick={onLogout}
+          onClick={handleLogout}
           className="w-full flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-red-400 hover:bg-gray-800/50 rounded-lg text-sm transition-all duration-200"
         >
           <IconLogOut />
@@ -317,12 +379,64 @@ function Sidebar({ activeTab, setActiveTab, onLogout }: {
 }
 
 // ==================== DASHBOARD TAB ====================
-function DashboardTab() {
-  const stats = [
-    { label: "Usuários Ativos", value: "3", change: "+1 este mês", color: "bg-blue-500" },
-    { label: "Mensagens Hoje", value: "47", change: "+12% vs ontem", color: "bg-green-500" },
-    { label: "Sessões de Suporte", value: "12", change: "3 em andamento", color: "bg-purple-500" },
-    { label: "Artigos na Base", value: "156", change: "Broadcom/VMware", color: "bg-orange-500" },
+function DashboardTab({ profile }: { profile: Profile }) {
+  const [stats, setStats] = useState({ users: 0, messages: 0, sessions: 0, articles: 0 });
+  const [activities, setActivities] = useState<ActivityLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        // Count users
+        const { count: userCount } = await supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .eq("is_active", true);
+
+        // Count knowledge base articles
+        const { count: articleCount } = await supabase
+          .from("knowledge_base")
+          .select("*", { count: "exact", head: true });
+
+        // Count chat sessions
+        const { count: sessionCount } = await supabase
+          .from("chat_sessions")
+          .select("*", { count: "exact", head: true });
+
+        // Count messages
+        const { count: messageCount } = await supabase
+          .from("chat_messages")
+          .select("*", { count: "exact", head: true });
+
+        setStats({
+          users: userCount || 0,
+          messages: messageCount || 0,
+          sessions: sessionCount || 0,
+          articles: articleCount || 0,
+        });
+
+        // Load recent activity
+        const { data: activityData } = await supabase
+          .from("activity_log")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        setActivities(activityData || []);
+      } catch (err) {
+        console.error("Error loading dashboard:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadDashboard();
+  }, [profile]);
+
+  const statCards = [
+    { label: "Usuários Ativos", value: String(stats.users), color: "bg-blue-500" },
+    { label: "Mensagens", value: String(stats.messages), color: "bg-green-500" },
+    { label: "Sessões de Suporte", value: String(stats.sessions), color: "bg-purple-500" },
+    { label: "Artigos na Base", value: String(stats.articles), color: "bg-orange-500" },
   ];
 
   const icons = [<IconUsers key="u" />, <IconMessageSquare key="m" />, <IconBot key="b" />, <IconDatabase key="d" />];
@@ -334,75 +448,193 @@ function DashboardTab() {
         <p className="text-gray-500 mt-1">Visão geral do sistema AllIA</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat, i) => (
-          <div key={i} className="card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-10 h-10 ${stat.color} rounded-lg flex items-center justify-center text-white`}>
-                {icons[i]}
-              </div>
-            </div>
-            <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-            <p className="text-sm font-medium text-gray-600 mt-1">{stat.label}</p>
-            <p className="text-xs text-gray-400 mt-2">{stat.change}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Recent Activity */}
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Atividade Recente</h2>
-        <div className="space-y-4">
-          {[
-            { time: "09:30", action: "Login realizado", user: "adonai@virtuallit.com.br", type: "auth" },
-            { time: "09:15", action: "Novo ticket de suporte #1247", user: "cliente@empresa.com", type: "support" },
-            { time: "08:45", action: "Base de conhecimento atualizada", user: "Sistema", type: "system" },
-            { time: "08:30", action: "Chatbot respondeu 5 perguntas", user: "AllIA (Bot)", type: "bot" },
-            { time: "08:00", action: "Backup automático concluído", user: "Sistema", type: "system" },
-          ].map((activity, i) => (
-            <div key={i} className="flex items-center gap-4 py-3 border-b border-gray-50 last:border-0">
-              <span className="text-xs font-mono text-gray-400 w-12">{activity.time}</span>
-              <div className={`w-2 h-2 rounded-full ${
-                activity.type === "auth" ? "bg-green-500" :
-                activity.type === "support" ? "bg-blue-500" :
-                activity.type === "bot" ? "bg-purple-500" :
-                "bg-gray-400"
-              }`} />
-              <div className="flex-1">
-                <p className="text-sm text-gray-700">{activity.action}</p>
-                <p className="text-xs text-gray-400">{activity.user}</p>
-              </div>
-            </div>
-          ))}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <svg className="animate-spin h-8 w-8 text-brand-red" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {statCards.map((stat, i) => (
+              <div key={i} className="card p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`w-10 h-10 ${stat.color} rounded-lg flex items-center justify-center text-white`}>
+                    {icons[i]}
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+                <p className="text-sm font-medium text-gray-600 mt-1">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Recent Activity */}
+          <div className="card p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Atividade Recente</h2>
+            {activities.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4">Nenhuma atividade registrada ainda.</p>
+            ) : (
+              <div className="space-y-4">
+                {activities.map((activity) => (
+                  <div key={activity.id} className="flex items-center gap-4 py-3 border-b border-gray-50 last:border-0">
+                    <span className="text-xs font-mono text-gray-400 w-16">
+                      {new Date(activity.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-700">{activity.action}</p>
+                      <p className="text-xs text-gray-400">{activity.details || ""}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 // ==================== USERS TAB ====================
-function UsersTab() {
-  const [users, setUsers] = useState(DEMO_USERS);
+function UsersTab({ profile }: { profile: Profile }) {
+  const [users, setUsers] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: "", email: "", role: "Operador" });
+  const [newUser, setNewUser] = useState({ name: "", email: "", password: "", role: "user" });
+  const [addError, setAddError] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const loadUsers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setUsers(data);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = {
-      id: users.length + 1,
-      ...newUser,
-      status: "Ativo",
-      lastAccess: "Nunca",
-    };
-    setUsers([...users, user]);
-    setShowAddModal(false);
-    setNewUser({ name: "", email: "", role: "Operador" });
+    setAddError("");
+    setAddLoading(true);
+
+    try {
+      // Check blocked domains
+      const domain = newUser.email.split("@")[1];
+      const { data: blocked } = await supabase
+        .from("blocked_domains")
+        .select("domain")
+        .eq("domain", domain)
+        .single();
+
+      if (blocked) {
+        setAddError("Este domínio de e-mail está bloqueado (concorrente/fabricante).");
+        setAddLoading(false);
+        return;
+      }
+
+      // Check organization user limit
+      const { data: org } = await supabase
+        .from("organizations")
+        .select("max_users")
+        .eq("domain", domain)
+        .single();
+
+      if (org) {
+        const { count } = await supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .like("email", `%@${domain}`);
+
+        if (count && count >= org.max_users) {
+          setAddError(`Limite de ${org.max_users} usuários para este domínio atingido.`);
+          setAddLoading(false);
+          return;
+        }
+      }
+
+      // Create user via Supabase Auth Admin (using service role would be needed for production)
+      // For now, use signUp which creates the user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: newUser.email,
+        password: newUser.password,
+        options: {
+          data: {
+            full_name: newUser.name,
+            role: newUser.role,
+          },
+        },
+      });
+
+      if (authError) {
+        setAddError(authError.message);
+        setAddLoading(false);
+        return;
+      }
+
+      if (authData.user) {
+        // Update the profile role (trigger creates with default 'user')
+        await supabase
+          .from("profiles")
+          .update({ role: newUser.role, full_name: newUser.name })
+          .eq("id", authData.user.id);
+
+        // Log activity
+        await supabase.from("activity_log").insert({
+          user_id: profile.id,
+          action: "Novo usuário criado",
+          details: `${newUser.name} (${newUser.email})`,
+        });
+
+        await loadUsers();
+        setShowAddModal(false);
+        setNewUser({ name: "", email: "", password: "", role: "user" });
+      }
+    } catch {
+      setAddError("Erro ao criar usuário. Tente novamente.");
+    } finally {
+      setAddLoading(false);
+    }
   };
 
-  const handleDeleteUser = (id: number) => {
-    if (id === 1) return;
-    setUsers(users.filter((u) => u.id !== id));
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (userId === profile.id) return; // Can't delete yourself
+
+    if (!confirm(`Tem certeza que deseja desativar o usuário ${userName}?`)) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_active: false })
+      .eq("id", userId);
+
+    if (!error) {
+      await supabase.from("activity_log").insert({
+        user_id: profile.id,
+        action: "Usuário desativado",
+        details: userName,
+      });
+      await loadUsers();
+    }
+  };
+
+  const roleLabel = (role: string) => {
+    switch (role) {
+      case "admin": return "Administrador";
+      case "manager": return "Gerente";
+      default: return "Usuário";
+    }
   };
 
   return (
@@ -421,70 +653,80 @@ function UsersTab() {
         </button>
       </div>
 
-      {/* Users Table */}
-      <div className="card overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuário</th>
-              <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Função</th>
-              <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Último Acesso</th>
-              <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-brand-red rounded-full flex items-center justify-center text-white text-sm font-bold">
-                      {user.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                      <p className="text-xs text-gray-400">{user.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    user.role === "Administrador"
-                      ? "bg-red-100 text-red-800"
-                      : user.role === "Operador"
-                      ? "bg-blue-100 text-blue-800"
-                      : "bg-gray-100 text-gray-800"
-                  }`}>
-                    {user.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${user.status === "Ativo" ? "bg-green-500" : "bg-gray-400"}`} />
-                    <span className="text-sm text-gray-600">{user.status}</span>
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">{user.lastAccess}</td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button className="p-2 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors">
-                      <IconEdit />
-                    </button>
-                    {user.id !== 1 && (
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <IconTrash />
-                      </button>
-                    )}
-                  </div>
-                </td>
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <svg className="animate-spin h-8 w-8 text-brand-red" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuário</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Função</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Criado em</th>
+                <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-brand-red rounded-full flex items-center justify-center text-white text-sm font-bold">
+                        {user.full_name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{user.full_name}</p>
+                        <p className="text-xs text-gray-400">{user.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      user.role === "admin"
+                        ? "bg-red-100 text-red-800"
+                        : user.role === "manager"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}>
+                      {roleLabel(user.role)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${user.is_active ? "bg-green-500" : "bg-gray-400"}`} />
+                      <span className="text-sm text-gray-600">{user.is_active ? "Ativo" : "Inativo"}</span>
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {new Date(user.created_at).toLocaleDateString("pt-BR")}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button className="p-2 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors">
+                        <IconEdit />
+                      </button>
+                      {user.id !== profile.id && (
+                        <button
+                          onClick={() => handleDeleteUser(user.id, user.full_name)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <IconTrash />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Add User Modal */}
       {showAddModal && (
@@ -515,27 +757,44 @@ function UsersTab() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  className="input-field"
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
                   className="input-field"
                 >
-                  <option value="Administrador">Administrador</option>
-                  <option value="Operador">Operador</option>
-                  <option value="Visualizador">Visualizador</option>
+                  <option value="admin">Administrador</option>
+                  <option value="manager">Gerente</option>
+                  <option value="user">Usuário</option>
                 </select>
               </div>
+              {addError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {addError}
+                </div>
+              )}
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => { setShowAddModal(false); setAddError(""); }}
                   className="btn-secondary flex-1 text-sm"
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn-primary flex-1 text-sm">
-                  Adicionar
+                <button type="submit" disabled={addLoading} className="btn-primary flex-1 text-sm disabled:opacity-70">
+                  {addLoading ? "Criando..." : "Adicionar"}
                 </button>
               </div>
             </form>
@@ -548,6 +807,20 @@ function UsersTab() {
 
 // ==================== CHATBOT TAB ====================
 function ChatbotTab() {
+  const [config, setConfig] = useState<Record<string, unknown> | null>(null);
+
+  useEffect(() => {
+    async function loadConfig() {
+      const { data } = await supabase
+        .from("system_settings")
+        .select("value")
+        .eq("key", "chatbot_config")
+        .single();
+      if (data) setConfig(data.value as Record<string, unknown>);
+    }
+    loadConfig();
+  }, []);
+
   return (
     <div>
       <div className="mb-8">
@@ -560,7 +833,7 @@ function ChatbotTab() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Status do Bot</h2>
           <div className="space-y-4">
             {[
-              { label: "Plataforma", value: "Botpress Cloud", status: "info" },
+              { label: "Plataforma", value: (config?.platform as string) || "Botpress Cloud", status: "info" },
               { label: "WhatsApp", value: "Pendente", status: "warning" },
               { label: "Base de Conhecimento", value: "Em configuração", status: "warning" },
               { label: "Autenticação 2FA", value: "Pendente", status: "warning" },
@@ -583,16 +856,16 @@ function ChatbotTab() {
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Nome</label>
-              <p className="text-sm text-gray-900">AllIA - VirtuHelper</p>
+              <p className="text-sm text-gray-900">{(config?.name as string) || "AllIA"} - {(config?.subtitle as string) || "VirtuHelper"}</p>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tom de Comunicação</label>
-              <p className="text-sm text-gray-900">Clara, objetiva e técnica quando necessário. Amigável sem ser infantil.</p>
+              <p className="text-sm text-gray-900">{(config?.personality as string) || "Clara, objetiva e técnica quando necessário. Amigável sem ser infantil."}</p>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Funções</label>
               <div className="flex flex-wrap gap-2 mt-1">
-                {["Suporte N1", "FAQ", "Autenticação", "Base VMware", "Abertura de Tickets"].map((tag) => (
+                {((config?.functions as string[]) || ["Suporte N1", "FAQ", "Autenticação", "Base VMware", "Abertura de Tickets", "Qualificação de Oportunidades"]).map((tag: string) => (
                   <span key={tag} className="px-3 py-1 bg-red-50 text-red-700 rounded-full text-xs font-medium">
                     {tag}
                   </span>
@@ -601,7 +874,7 @@ function ChatbotTab() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Disponibilidade</label>
-              <p className="text-sm text-gray-900">24/7 - Sempre disponível</p>
+              <p className="text-sm text-gray-900">{(config?.availability as string) || "24/7"} - Sempre disponível</p>
             </div>
           </div>
         </div>
@@ -612,12 +885,20 @@ function ChatbotTab() {
 
 // ==================== KNOWLEDGE BASE TAB ====================
 function KnowledgeTab() {
-  const sources = [
-    { name: "Broadcom Support Portal", url: "support.broadcom.com", docs: 45, status: "Indexado" },
-    { name: "Broadcom TechDocs", url: "techdocs.broadcom.com", docs: 67, status: "Indexado" },
-    { name: "Broadcom Knowledge Base", url: "knowledge.broadcom.com", docs: 32, status: "Pendente" },
-    { name: "VMware Resource Center", url: "vmware.com/resources", docs: 12, status: "Pendente" },
-  ];
+  const [articles, setArticles] = useState<{ id: string; title: string; category: string; source_url: string | null; is_published: boolean }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadArticles() {
+      const { data } = await supabase
+        .from("knowledge_base")
+        .select("*")
+        .order("created_at", { ascending: false });
+      setArticles(data || []);
+      setLoading(false);
+    }
+    loadArticles();
+  }, []);
 
   return (
     <div>
@@ -626,44 +907,79 @@ function KnowledgeTab() {
         <p className="text-gray-500 mt-1">Fontes de documentação para suporte técnico</p>
       </div>
 
-      <div className="card overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Fonte</th>
-              <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Documentos</th>
-              <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sources.map((source, i) => (
-              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                <td className="px-6 py-4">
-                  <p className="text-sm font-medium text-gray-900">{source.name}</p>
-                  <p className="text-xs text-gray-400">{source.url}</p>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-600">{source.docs} artigos</td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex items-center gap-1.5 text-sm ${
-                    source.status === "Indexado" ? "text-green-600" : "text-yellow-600"
-                  }`}>
-                    <span className={`w-2 h-2 rounded-full ${
-                      source.status === "Indexado" ? "bg-green-500" : "bg-yellow-500"
-                    }`} />
-                    {source.status}
-                  </span>
-                </td>
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <svg className="animate-spin h-8 w-8 text-brand-red" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+        </div>
+      ) : articles.length === 0 ? (
+        <div className="card p-12 text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400">
+            <IconDatabase />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Base vazia</h3>
+          <p className="text-gray-500 text-sm max-w-md mx-auto">
+            Os artigos da base de conhecimento aparecerão aqui conforme forem adicionados.
+          </p>
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Título</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Categoria</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {articles.map((article) => (
+                <tr key={article.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <p className="text-sm font-medium text-gray-900">{article.title}</p>
+                    {article.source_url && <p className="text-xs text-gray-400">{article.source_url}</p>}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{article.category}</td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-1.5 text-sm ${
+                      article.is_published ? "text-green-600" : "text-yellow-600"
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${
+                        article.is_published ? "bg-green-500" : "bg-yellow-500"
+                      }`} />
+                      {article.is_published ? "Publicado" : "Rascunho"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
 // ==================== MESSAGES TAB ====================
 function MessagesTab() {
+  const [sessions, setSessions] = useState<{ id: string; visitor_name: string | null; visitor_email: string | null; channel: string; status: string; started_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadSessions() {
+      const { data } = await supabase
+        .from("chat_sessions")
+        .select("*")
+        .order("started_at", { ascending: false })
+        .limit(50);
+      setSessions(data || []);
+      setLoading(false);
+    }
+    loadSessions();
+  }, []);
+
   return (
     <div>
       <div className="mb-8">
@@ -671,21 +987,90 @@ function MessagesTab() {
         <p className="text-gray-500 mt-1">Histórico de conversas do chatbot</p>
       </div>
 
-      <div className="card p-12 text-center">
-        <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400">
-          <IconMessageSquare />
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <svg className="animate-spin h-8 w-8 text-brand-red" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhuma mensagem ainda</h3>
-        <p className="text-gray-500 text-sm max-w-md mx-auto">
-          As mensagens do chatbot WhatsApp aparecerão aqui assim que a integração com o Botpress estiver configurada.
-        </p>
-      </div>
+      ) : sessions.length === 0 ? (
+        <div className="card p-12 text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400">
+            <IconMessageSquare />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhuma mensagem ainda</h3>
+          <p className="text-gray-500 text-sm max-w-md mx-auto">
+            As conversas do chatbot aparecerão aqui assim que a integração com o Botpress estiver configurada.
+          </p>
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Visitante</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Canal</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Início</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((session) => (
+                <tr key={session.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <p className="text-sm font-medium text-gray-900">{session.visitor_name || "Anônimo"}</p>
+                    <p className="text-xs text-gray-400">{session.visitor_email || ""}</p>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600 capitalize">{session.channel}</td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-1.5 text-sm ${
+                      session.status === "active" ? "text-green-600" : "text-gray-500"
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${
+                        session.status === "active" ? "bg-green-500" : "bg-gray-400"
+                      }`} />
+                      {session.status === "active" ? "Ativa" : session.status === "escalated" ? "Escalada" : "Encerrada"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {new Date(session.started_at).toLocaleString("pt-BR")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
 // ==================== SETTINGS TAB ====================
 function SettingsTab() {
+  const [integrations, setIntegrations] = useState<Record<string, string> | null>(null);
+
+  useEffect(() => {
+    async function loadSettings() {
+      const { data } = await supabase
+        .from("system_settings")
+        .select("value")
+        .eq("key", "integrations")
+        .single();
+      if (data) setIntegrations(data.value as Record<string, string>);
+    }
+    loadSettings();
+  }, []);
+
+  const integrationList = [
+    { key: "supabase", name: "Supabase (Database)", fallbackStatus: "connected" },
+    { key: "botpress", name: "Botpress Cloud", fallbackStatus: "pending" },
+    { key: "whatsapp", name: "WhatsApp Business API", fallbackStatus: "pending" },
+    { key: "pipedrive", name: "Pipedrive CRM", fallbackStatus: "pending" },
+    { key: "resend", name: "Resend (Email 2FA)", fallbackStatus: "pending" },
+    { key: "surveymonkey", name: "SurveyMonkey (Qualificação)", fallbackStatus: "pending" },
+  ];
+
   return (
     <div>
       <div className="mb-8">
@@ -697,30 +1082,28 @@ function SettingsTab() {
         <div className="card p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Integrações</h2>
           <div className="space-y-4">
-            {[
-              { name: "Supabase (Database)", status: "Configurado", connected: true },
-              { name: "Botpress Cloud", status: "Pendente", connected: false },
-              { name: "WhatsApp Business API", status: "Pendente", connected: false },
-              { name: "Pipedrive CRM", status: "Pendente", connected: false },
-              { name: "Resend (Email 2FA)", status: "Pendente", connected: false },
-            ].map((integration, i) => (
-              <div key={i} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{integration.name}</p>
-                  <p className="text-xs text-gray-400">{integration.status}</p>
+            {integrationList.map((integration) => {
+              const status = integrations?.[integration.key] || integration.fallbackStatus;
+              const connected = status === "connected";
+              return (
+                <div key={integration.key} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{integration.name}</p>
+                    <p className="text-xs text-gray-400 capitalize">{status === "connected" ? "Configurado" : "Pendente"}</p>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
+                    connected
+                      ? "bg-green-100 text-green-700"
+                      : "bg-gray-100 text-gray-500"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      connected ? "bg-green-500" : "bg-gray-400"
+                    }`} />
+                    {connected ? "Conectado" : "Desconectado"}
+                  </span>
                 </div>
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                  integration.connected
-                    ? "bg-green-100 text-green-700"
-                    : "bg-gray-100 text-gray-500"
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${
-                    integration.connected ? "bg-green-500" : "bg-gray-400"
-                  }`} />
-                  {integration.connected ? "Conectado" : "Desconectado"}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -734,12 +1117,19 @@ function SettingsTab() {
               </div>
               <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">Em breve</span>
             </div>
+            <div className="flex items-center justify-between py-3 border-b border-gray-50">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Controle por Domínio</p>
+                <p className="text-xs text-gray-400">Limite de usuários por organização</p>
+              </div>
+              <span className="text-xs font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">Ativo</span>
+            </div>
             <div className="flex items-center justify-between py-3">
               <div>
-                <p className="text-sm font-medium text-gray-900">Validação Pipedrive</p>
-                <p className="text-xs text-gray-400">Autenticação de clientes via CRM</p>
+                <p className="text-sm font-medium text-gray-900">Blocklist de Concorrentes</p>
+                <p className="text-xs text-gray-400">Domínios bloqueados para cadastro</p>
               </div>
-              <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">Em breve</span>
+              <span className="text-xs font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">Ativo</span>
             </div>
           </div>
         </div>
@@ -750,28 +1140,60 @@ function SettingsTab() {
 
 // ==================== MAIN APP ====================
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [checkingSession, setCheckingSession] = useState(true);
 
-  if (!isLoggedIn) {
-    return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
+  useEffect(() => {
+    // Check if user is already logged in
+    async function checkSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
+
+        if (profileData && profileData.is_active) {
+          setProfile(profileData as Profile);
+        }
+      }
+      setCheckingSession(false);
+    }
+    checkSession();
+  }, []);
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <svg className="animate-spin h-10 w-10 text-brand-red" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return <LoginPage onLogin={(p) => setProfile(p)} />;
   }
 
   const renderContent = () => {
     switch (activeTab) {
-      case "dashboard": return <DashboardTab />;
-      case "users": return <UsersTab />;
+      case "dashboard": return <DashboardTab profile={profile} />;
+      case "users": return <UsersTab profile={profile} />;
       case "chatbot": return <ChatbotTab />;
       case "knowledge": return <KnowledgeTab />;
       case "messages": return <MessagesTab />;
       case "settings": return <SettingsTab />;
-      default: return <DashboardTab />;
+      default: return <DashboardTab profile={profile} />;
     }
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => setIsLoggedIn(false)} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => setProfile(null)} profile={profile} />
       <main className="flex-1 overflow-auto">
         <div className="flex items-center justify-end p-4 pb-0">
           <img src="/allia-logo.png" alt="AllIA" className="h-12 w-auto" />
