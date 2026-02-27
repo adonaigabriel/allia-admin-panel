@@ -129,6 +129,22 @@ function IconDatabase() {
   );
 }
 
+function IconClipboard() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>
+    </svg>
+  );
+}
+
+function IconExternalLink() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+    </svg>
+  );
+}
+
 // ==================== LOGIN PAGE ====================
 function LoginPage({ onLogin }: { onLogin: (profile: Profile) => void }) {
   const [email, setEmail] = useState("");
@@ -318,6 +334,7 @@ function Sidebar({ activeTab, setActiveTab, onLogout, profile }: {
     { id: "users", label: "Usuários", icon: <IconUsers /> },
     { id: "chatbot", label: "Chatbot", icon: <IconBot /> },
     { id: "knowledge", label: "Base de Conhecimento", icon: <IconDatabase /> },
+    { id: "forms", label: "Formulários", icon: <IconClipboard /> },
     { id: "messages", label: "Mensagens", icon: <IconMessageSquare /> },
     { id: "settings", label: "Configurações", icon: <IconSettings /> },
   ];
@@ -1046,6 +1063,432 @@ function MessagesTab() {
   );
 }
 
+// ==================== QUALIFICATION FORMS TAB ====================
+interface QualificationForm {
+  id: string;
+  name: string;
+  manufacturer: string;
+  solution_category: string;
+  survey_url: string;
+  is_active: boolean;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function FormsTab({ profile }: { profile: Profile }) {
+  const [forms, setForms] = useState<QualificationForm[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingForm, setEditingForm] = useState<QualificationForm | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    manufacturer: "",
+    solution_category: "",
+    survey_url: "",
+    description: "",
+    is_active: true,
+  });
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const loadForms = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("qualification_forms")
+      .select("*")
+      .order("manufacturer", { ascending: true });
+
+    if (!error && data) {
+      setForms(data);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadForms();
+  }, [loadForms]);
+
+  const openAddModal = () => {
+    setEditingForm(null);
+    setFormData({
+      name: "",
+      manufacturer: "",
+      solution_category: "",
+      survey_url: "",
+      description: "",
+      is_active: true,
+    });
+    setSaveError("");
+    setShowModal(true);
+  };
+
+  const openEditModal = (form: QualificationForm) => {
+    setEditingForm(form);
+    setFormData({
+      name: form.name,
+      manufacturer: form.manufacturer,
+      solution_category: form.solution_category,
+      survey_url: form.survey_url,
+      description: form.description || "",
+      is_active: form.is_active,
+    });
+    setSaveError("");
+    setShowModal(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaveError("");
+    setSaveLoading(true);
+
+    try {
+      if (editingForm) {
+        // Update existing
+        const { error } = await supabase
+          .from("qualification_forms")
+          .update({
+            name: formData.name,
+            manufacturer: formData.manufacturer,
+            solution_category: formData.solution_category,
+            survey_url: formData.survey_url,
+            description: formData.description || null,
+            is_active: formData.is_active,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingForm.id);
+
+        if (error) {
+          setSaveError(error.message);
+          setSaveLoading(false);
+          return;
+        }
+
+        await supabase.from("activity_log").insert({
+          user_id: profile.id,
+          action: "Formul\u00e1rio atualizado",
+          details: `${formData.manufacturer} - ${formData.name}`,
+        });
+      } else {
+        // Create new
+        const { error } = await supabase
+          .from("qualification_forms")
+          .insert({
+            name: formData.name,
+            manufacturer: formData.manufacturer,
+            solution_category: formData.solution_category,
+            survey_url: formData.survey_url,
+            description: formData.description || null,
+            is_active: formData.is_active,
+          });
+
+        if (error) {
+          setSaveError(error.message);
+          setSaveLoading(false);
+          return;
+        }
+
+        await supabase.from("activity_log").insert({
+          user_id: profile.id,
+          action: "Formul\u00e1rio criado",
+          details: `${formData.manufacturer} - ${formData.name}`,
+        });
+      }
+
+      await loadForms();
+      setShowModal(false);
+    } catch {
+      setSaveError("Erro ao salvar. Tente novamente.");
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const handleToggleActive = async (form: QualificationForm) => {
+    const newStatus = !form.is_active;
+    const { error } = await supabase
+      .from("qualification_forms")
+      .update({ is_active: newStatus, updated_at: new Date().toISOString() })
+      .eq("id", form.id);
+
+    if (!error) {
+      await supabase.from("activity_log").insert({
+        user_id: profile.id,
+        action: newStatus ? "Formul\u00e1rio ativado" : "Formul\u00e1rio desativado",
+        details: `${form.manufacturer} - ${form.name}`,
+      });
+      await loadForms();
+    }
+  };
+
+  const handleDelete = async (form: QualificationForm) => {
+    if (!confirm(`Tem certeza que deseja excluir o formul\u00e1rio "${form.name}"?`)) return;
+
+    const { error } = await supabase
+      .from("qualification_forms")
+      .delete()
+      .eq("id", form.id);
+
+    if (!error) {
+      await supabase.from("activity_log").insert({
+        user_id: profile.id,
+        action: "Formul\u00e1rio exclu\u00eddo",
+        details: `${form.manufacturer} - ${form.name}`,
+      });
+      await loadForms();
+    }
+  };
+
+  const manufacturers = Array.from(new Set(forms.map(f => f.manufacturer)));
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Formul\u00e1rios de Qualifica\u00e7\u00e3o</h1>
+          <p className="text-gray-500 mt-1">Roteamento de formul\u00e1rios SurveyMonkey por fabricante/solu\u00e7\u00e3o</p>
+        </div>
+        <button
+          onClick={openAddModal}
+          className="btn-primary flex items-center gap-2 text-sm"
+        >
+          <IconPlus />
+          Novo Formul\u00e1rio
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <svg className="animate-spin h-8 w-8 text-brand-red" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+        </div>
+      ) : forms.length === 0 ? (
+        <div className="card p-12 text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400">
+            <IconClipboard />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum formul\u00e1rio cadastrado</h3>
+          <p className="text-gray-500 text-sm max-w-md mx-auto">
+            Adicione formul\u00e1rios de qualifica\u00e7\u00e3o para que a AllIA envie o link correto ao identificar uma oportunidade.
+          </p>
+          <button
+            onClick={openAddModal}
+            className="btn-primary inline-flex items-center gap-2 text-sm mt-6"
+          >
+            <IconPlus />
+            Adicionar Primeiro Formul\u00e1rio
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="card p-4">
+              <p className="text-sm text-gray-500">Total de Formul\u00e1rios</p>
+              <p className="text-2xl font-bold text-gray-900">{forms.length}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-sm text-gray-500">Ativos</p>
+              <p className="text-2xl font-bold text-green-600">{forms.filter(f => f.is_active).length}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-sm text-gray-500">Fabricantes</p>
+              <p className="text-2xl font-bold text-gray-900">{manufacturers.length}</p>
+            </div>
+          </div>
+
+          {/* Forms table */}
+          <div className="card overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Fabricante</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Formul\u00e1rio</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Categoria</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Link SurveyMonkey</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">A\u00e7\u00f5es</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forms.map((form) => (
+                  <tr key={form.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-50 text-red-700">
+                        {form.manufacturer}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-medium text-gray-900">{form.name}</p>
+                      {form.description && <p className="text-xs text-gray-400 mt-0.5">{form.description}</p>}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{form.solution_category}</td>
+                    <td className="px-6 py-4">
+                      {form.survey_url && !form.survey_url.includes("placeholder") ? (
+                        <a
+                          href={form.survey_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          Abrir <IconExternalLink />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full font-medium">Placeholder</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => handleToggleActive(form)}
+                        className="inline-flex items-center gap-1.5 cursor-pointer"
+                        title={form.is_active ? "Clique para desativar" : "Clique para ativar"}
+                      >
+                        <span className={`w-8 h-4 rounded-full relative transition-colors duration-200 ${
+                          form.is_active ? "bg-green-500" : "bg-gray-300"
+                        }`}>
+                          <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform duration-200 ${
+                            form.is_active ? "translate-x-4" : "translate-x-0.5"
+                          }`} />
+                        </span>
+                        <span className={`text-xs font-medium ${
+                          form.is_active ? "text-green-600" : "text-gray-400"
+                        }`}>
+                          {form.is_active ? "Ativo" : "Inativo"}
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(form)}
+                          className="p-2 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors"
+                          title="Editar"
+                        >
+                          <IconEdit />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(form)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Excluir"
+                        >
+                          <IconTrash />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-6">
+              {editingForm ? "Editar Formul\u00e1rio" : "Novo Formul\u00e1rio de Qualifica\u00e7\u00e3o"}
+            </h2>
+            <form onSubmit={handleSave} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fabricante</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.manufacturer}
+                    onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                    className="input-field"
+                    placeholder="Ex: Dell, VMware"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Categoria da Solu\u00e7\u00e3o</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.solution_category}
+                    onChange={(e) => setFormData({ ...formData, solution_category: e.target.value })}
+                    className="input-field"
+                    placeholder="Ex: Servidores, Virtualiza\u00e7\u00e3o"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Formul\u00e1rio</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="input-field"
+                  placeholder="Ex: Qualifica\u00e7\u00e3o Dell Servidores"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL do SurveyMonkey</label>
+                <input
+                  type="url"
+                  required
+                  value={formData.survey_url}
+                  onChange={(e) => setFormData({ ...formData, survey_url: e.target.value })}
+                  className="input-field"
+                  placeholder="https://pt.surveymonkey.com/r/..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descri\u00e7\u00e3o (opcional)</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="input-field"
+                  rows={2}
+                  placeholder="Breve descri\u00e7\u00e3o do formul\u00e1rio..."
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
+                  className="inline-flex items-center gap-2"
+                >
+                  <span className={`w-10 h-5 rounded-full relative transition-colors duration-200 ${
+                    formData.is_active ? "bg-green-500" : "bg-gray-300"
+                  }`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                      formData.is_active ? "translate-x-5" : "translate-x-0.5"
+                    }`} />
+                  </span>
+                  <span className="text-sm text-gray-700">{formData.is_active ? "Ativo" : "Inativo"}</span>
+                </button>
+              </div>
+              {saveError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {saveError}
+                </div>
+              )}
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => { setShowModal(false); setSaveError(""); }}
+                  className="btn-secondary flex-1 text-sm"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" disabled={saveLoading} className="btn-primary flex-1 text-sm disabled:opacity-70">
+                  {saveLoading ? "Salvando..." : editingForm ? "Salvar Altera\u00e7\u00f5es" : "Adicionar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ==================== SETTINGS TAB ====================
 function SettingsTab() {
   const [integrations, setIntegrations] = useState<Record<string, string> | null>(null);
@@ -1185,6 +1628,7 @@ export default function Home() {
       case "users": return <UsersTab profile={profile} />;
       case "chatbot": return <ChatbotTab />;
       case "knowledge": return <KnowledgeTab />;
+      case "forms": return <FormsTab profile={profile} />;
       case "messages": return <MessagesTab />;
       case "settings": return <SettingsTab />;
       default: return <DashboardTab profile={profile} />;
