@@ -666,20 +666,40 @@ function UsersTab({ profile }: { profile: Profile }) {
     }
   };
 
-  const handleDeleteUser = async (userId: string, userName: string) => {
-    if (userId === profile.id) return; // Can't delete yourself
-
-    if (!confirm(`Tem certeza que deseja desativar o usuário ${userName}?`)) return;
+  const handleToggleUserActive = async (user: Profile) => {
+    if (user.id === profile.id) return; // Can't deactivate yourself
+    const newStatus = !user.is_active;
+    const actionLabel = newStatus ? "ativar" : "desativar";
+    if (!confirm(`Tem certeza que deseja ${actionLabel} o usuário ${user.full_name}?`)) return;
 
     const { error } = await supabase
       .from("profiles")
-      .update({ is_active: false })
+      .update({ is_active: newStatus })
+      .eq("id", user.id);
+
+    if (!error) {
+      await supabase.from("activity_log").insert({
+        user_id: profile.id,
+        action: newStatus ? "Usuário ativado" : "Usuário desativado",
+        details: user.full_name,
+      });
+      await loadUsers();
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (userId === profile.id) return; // Can't delete yourself
+    if (!confirm(`ATENÇÃO: Esta ação é irreversível!\n\nTem certeza que deseja EXCLUIR permanentemente o usuário ${userName}?`)) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .delete()
       .eq("id", userId);
 
     if (!error) {
       await supabase.from("activity_log").insert({
         user_id: profile.id,
-        action: "Usuário desativado",
+        action: "Usuário excluído",
         details: userName,
       });
       await loadUsers();
@@ -765,12 +785,38 @@ function UsersTab({ profile }: { profile: Profile }) {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => handleOpenEdit(user)} className="p-2 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors">
+                      <button
+                        onClick={() => handleOpenEdit(user)}
+                        title="Editar usuário"
+                        className="p-2 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors"
+                      >
                         <IconEdit />
                       </button>
                       {user.id !== profile.id && (
                         <button
+                          onClick={() => handleToggleUserActive(user)}
+                          title={user.is_active ? "Desativar usuário" : "Ativar usuário"}
+                          className={`p-2 rounded-lg transition-colors ${
+                            user.is_active
+                              ? "text-green-500 hover:text-green-700 hover:bg-green-50"
+                              : "text-gray-400 hover:text-green-600 hover:bg-green-50"
+                          }`}
+                        >
+                          {user.is_active ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/>
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
+                            </svg>
+                          )}
+                        </button>
+                      )}
+                      {user.id !== profile.id && (
+                        <button
                           onClick={() => handleDeleteUser(user.id, user.full_name)}
+                          title="Excluir usuário permanentemente"
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           <IconTrash />
