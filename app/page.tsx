@@ -522,7 +522,7 @@ function UsersTab({ profile }: { profile: Profile }) {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: "", email: "", password: "", role: "user" });
+  const [newUser, setNewUser] = useState({ name: "", email: "", whatsapp: "", password: "", role: "user" });
   const [addError, setAddError] = useState("");
   const [addLoading, setAddLoading] = useState(false);
 
@@ -605,7 +605,7 @@ function UsersTab({ profile }: { profile: Profile }) {
         // Update the profile role (trigger creates with default 'user')
         await supabase
           .from("profiles")
-          .update({ role: newUser.role, full_name: newUser.name })
+          .update({ role: newUser.role, full_name: newUser.name, whatsapp: newUser.whatsapp })
           .eq("id", authData.user.id);
 
         // Log activity
@@ -617,7 +617,7 @@ function UsersTab({ profile }: { profile: Profile }) {
 
         await loadUsers();
         setShowAddModal(false);
-        setNewUser({ name: "", email: "", password: "", role: "user" });
+        setNewUser({ name: "", email: "", whatsapp: "", password: "", role: "user" });
       }
     } catch {
       setAddError("Erro ao criar usuário. Tente novamente.");
@@ -771,6 +771,16 @@ function UsersTab({ profile }: { profile: Profile }) {
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                   className="input-field"
                   placeholder="email@empresa.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp/Telefone</label>
+                <input
+                  type="text"
+                  value={newUser.whatsapp}
+                  onChange={(e) => setNewUser({ ...newUser, whatsapp: e.target.value })}
+                  className="input-field"
+                  placeholder="Ex: 5511999998888"
                 />
               </div>
               <div>
