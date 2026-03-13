@@ -11,6 +11,7 @@ interface Profile {
   full_name: string;
   role: string;
   department: string | null;
+  whatsapp: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -525,6 +526,10 @@ function UsersTab({ profile }: { profile: Profile }) {
   const [newUser, setNewUser] = useState({ name: "", email: "", whatsapp: "", password: "", role: "user" });
   const [addError, setAddError] = useState("");
   const [addLoading, setAddLoading] = useState(false);
+  const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", whatsapp: "", role: "user" });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const loadUsers = useCallback(async () => {
     const { data, error } = await supabase
@@ -623,6 +628,41 @@ function UsersTab({ profile }: { profile: Profile }) {
       setAddError("Erro ao criar usuário. Tente novamente.");
     } finally {
       setAddLoading(false);
+    }
+  };
+
+  const handleOpenEdit = (user: Profile) => {
+    setEditingUser(user);
+    setEditForm({ name: user.full_name, whatsapp: user.whatsapp || "", role: user.role });
+    setEditError("");
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setEditLoading(true);
+    setEditError("");
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: editForm.name, whatsapp: editForm.whatsapp, role: editForm.role })
+        .eq("id", editingUser.id);
+      if (error) {
+        setEditError("Erro ao salvar. Tente novamente.");
+        setEditLoading(false);
+        return;
+      }
+      await supabase.from("activity_log").insert({
+        user_id: editingUser.id,
+        action: "Perfil atualizado",
+        details: editForm.name,
+      });
+      await loadUsers();
+      setEditingUser(null);
+    } catch {
+      setEditError("Erro ao salvar. Tente novamente.");
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -725,7 +765,7 @@ function UsersTab({ profile }: { profile: Profile }) {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors">
+                      <button onClick={() => handleOpenEdit(user)} className="p-2 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors">
                         <IconEdit />
                       </button>
                       {user.id !== profile.id && (
@@ -742,6 +782,76 @@ function UsersTab({ profile }: { profile: Profile }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-6">Editar Usuário</h2>
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="input-field"
+                  placeholder="Nome do usuário"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  disabled
+                  value={editingUser.email}
+                  className="input-field opacity-60 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp/Telefone</label>
+                <input
+                  type="text"
+                  value={editForm.whatsapp}
+                  onChange={(e) => setEditForm({ ...editForm, whatsapp: e.target.value })}
+                  className="input-field"
+                  placeholder="Ex: 5511999998888"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                  className="input-field"
+                >
+                  <option value="admin">Administrador</option>
+                  <option value="manager">Gerente</option>
+                  <option value="user">Usuário</option>
+                </select>
+              </div>
+              {editError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {editError}
+                </div>
+              )}
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => { setEditingUser(null); setEditError(""); }}
+                  className="btn-secondary flex-1 text-sm"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" disabled={editLoading} className="btn-primary flex-1 text-sm disabled:opacity-70">
+                  {editLoading ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
